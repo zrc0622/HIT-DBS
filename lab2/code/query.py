@@ -50,7 +50,7 @@ class QueryWindow(QWidget):
         box2 = QFrame(self)
         box2.setFrameShape(QFrame.Box)
         box2_layout = QVBoxLayout()
-        label2 = QLabel('中心教师信息查询', self)
+        label2 = QLabel('中心论文查询', self)
         label2.setAlignment(Qt.AlignHCenter)
         label_laboratory = QLabel('中心名:', self)
         
@@ -164,7 +164,10 @@ class QueryWindow(QWidget):
             # 创建一个游标对象
             with connection.cursor() as cursor:
                 # 执行查询操作
-                sql_query = 'SELECT teacher.teacher_id, teacher.name, paper.title, paper.year FROM teacher, paper WHERE teacher.name = %s AND teacher.teacher_id=paper.author_id'
+                sql_query = '''
+                SELECT teacher.teacher_id, teacher.name, paper.title, paper.year 
+                FROM teacher, paper 
+                WHERE teacher.name = %s AND teacher.teacher_id=paper.author_id'''
                 cursor.execute(sql_query, (teacher_name))
 
             # 获取查询结果集
@@ -175,7 +178,7 @@ class QueryWindow(QWidget):
                 query_result_dialog = QueryResultDialog(result)
                 query_result_dialog.exec_()
             if not result:
-                QMessageBox.warning(self, '警告', '没有查询到相关老师')
+                QMessageBox.warning(self, '警告', '没有查询到相关教师或该教师未发表论文')
 
         except Exception as e:
             if e.args[0] == 1064:
@@ -223,20 +226,10 @@ class QueryWindow(QWidget):
                 query_result_dialog = QueryResultDialog(result)
                 query_result_dialog.exec_()
             if not result:
-                QMessageBox.warning(self, '警告', '没有查询到相关中心')
+                QMessageBox.warning(self, '警告', '该中心暂无论文发表')
 
         except Exception as e:
-            if e.args[0] == 1062:
-                # 提示用户发生错误
-                QMessageBox.warning(self, '错误', '插入重复值错误：可能是主键冲突')
-            elif e.args[0] == 1048:
-                # 提示用户发生错误
-                QMessageBox.warning(self, '错误', '插入空值错误')
-            elif e.args[0] == 1452:
-                # 提示用户发生错误
-                QMessageBox.warning(self, '错误', '外键约束错误')
-            else: 
-                QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
+            QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
 
         finally:
             # 完成后关闭数据库连接
