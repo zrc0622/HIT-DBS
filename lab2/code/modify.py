@@ -176,6 +176,22 @@ class ModifyWindow(QWidget):
 
         self.setLayout(boxes_layout)
 
+        # 设置标签大小
+        font = label1.font()
+        font.setBold(True)
+        label1.setFont(font)
+        label1.setStyleSheet("font-size: 14px;") 
+
+        font = label2.font()
+        font.setBold(True)
+        label2.setFont(font)
+        label2.setStyleSheet("font-size: 14px;") 
+
+        font = label3.font()
+        font.setBold(True)
+        label3.setFont(font)
+        label3.setStyleSheet("font-size: 14px;") 
+
     # 对teacher的操作
     def add_to_teacher(self): 
         teacher_id = self.input_teacher_id.text().strip() if self.input_teacher_id.text().strip() else None
@@ -273,11 +289,17 @@ class ModifyWindow(QWidget):
                 QMessageBox.warning(self, '警告', '没有匹配的主键记录。')
 
         except Exception as e:
-            # 发生错误时回滚
-            connection.rollback()
+            if e.args[0] == 1451:
+                # 发生错误时回滚
+                connection.rollback()
+                # 提示用户发生错误
+                QMessageBox.warning(self, '错误', '外键约束错误')
+            else:
+                # 发生错误时回滚
+                connection.rollback()
 
-            # 提示用户发生错误
-            QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
+                # 提示用户发生错误
+                QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
 
         finally:
             # 完成后关闭数据库连接
@@ -377,11 +399,17 @@ class ModifyWindow(QWidget):
                 QMessageBox.warning(self, '警告', '没有匹配的主键记录。')
 
         except Exception as e:
-            # 发生错误时回滚
-            connection.rollback()
+            if e.args[0] == 1451:
+                # 发生错误时回滚
+                connection.rollback()
+                # 提示用户发生错误
+                QMessageBox.warning(self, '错误', '外键约束错误')
+            else:
+                # 发生错误时回滚
+                connection.rollback()
 
-            # 提示用户发生错误
-            QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
+                # 提示用户发生错误
+                QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
 
         finally:
             # 完成后关闭数据库连接
@@ -478,11 +506,17 @@ class ModifyWindow(QWidget):
                 QMessageBox.warning(self, '警告', '没有匹配的主键记录。')
 
         except Exception as e:
-            # 发生错误时回滚
-            connection.rollback()
+            if e.args[0] == 1451:
+                # 发生错误时回滚
+                connection.rollback()
+                # 提示用户发生错误
+                QMessageBox.warning(self, '错误', '外键约束错误')
+            else:
+                # 发生错误时回滚
+                connection.rollback()
 
-            # 提示用户发生错误
-            QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
+                # 提示用户发生错误
+                QMessageBox.warning(self, '错误', f'发生错误：{str(e)}')
 
         finally:
             # 完成后关闭数据库连接

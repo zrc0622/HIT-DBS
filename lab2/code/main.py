@@ -15,17 +15,24 @@ class MainWindow(QWidget):
 
         # 组件
         label = QLabel('教学管理系统', self)
-        self.modify_button = QPushButton('修改', self) # 修改界面
-        self.query_button = QPushButton('查询', self) # 查询界面
+
+        # 设置标签文本加粗
+        font = label.font()
+        font.setBold(True)
+        label.setFont(font)
+        label.setStyleSheet("font-size: 20px;") 
+        
+        self.modify_button = QPushButton('增删功能', self) # 修改界面
+        self.query_button = QPushButton('查询功能', self) # 查询界面
 
         layout = QVBoxLayout() # 设置垂直布局
-        layout.addStretch(1) # 添加弹簧(参数表示比例)
+        layout.addStretch(2) # 添加弹簧(参数表示比例)
         layout.addWidget(label)
-        layout.addStretch(2)
+        layout.addStretch(3)
         layout.addWidget(self.modify_button)
-        layout.addStretch(1)
-        layout.addWidget(self.query_button)
         layout.addStretch(2)
+        layout.addWidget(self.query_button)
+        layout.addStretch(4)
 
         self.setLayout(layout) # 将垂直布局添加到主窗口
 
