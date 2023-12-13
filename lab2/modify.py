@@ -11,7 +11,7 @@ class ModifyWindow(QWidget):
 
     def init_ui(self):
         self.resize(600, 400)
-        self.setWindowTitle('窗口布局示例')
+        self.setWindowTitle('修改界面')
 
         # 创建三个小框并水平排列
         boxes_layout = QHBoxLayout()

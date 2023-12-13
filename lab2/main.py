@@ -11,7 +11,7 @@ class MainWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle('教学管理系统')
+        self.setWindowTitle('主界面')
 
         # 组件
         label = QLabel('教学管理系统', self)
