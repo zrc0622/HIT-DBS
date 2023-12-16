@@ -6,14 +6,17 @@
 4. gene_data函数: 生成关系R和S的随机数据, 这些数据包括元组和元组中的属性值, 范围由预定义的参数确定。
 5. write_disk函数: 将生成的关系实例写入模拟磁盘, 每个关系的数据被划分为多个磁盘块, 每个磁盘块保存一定数量的元组。
 代码来源于https://github.com/HIT-SCIR-chichi/hit_db_lab/blob/master/lab2/extmem.py, 我仅为其添加了易于理解的注释
+
+关系R具有两个属性A和B, 其中A和B的属性值均为int型(4个字节), A的值域为[1, 40], B的值域为[1, 1000]
+关系S具有两个属性C和D, 其中C和D的属性值均为int型(4个字节)。C的值域为[20, 60], D的值域为[1, 1000]
 '''
 
 import os
 from random import randint
 
-disk_dir = './emulate_disk/'  # 模拟磁盘所在的目录
+disk_dir = './emulate_disk/raw_data/'  # 模拟磁盘所在的目录
 tuple_num, blk_num1, blk_num2 = 7, 16, 32  # 每个磁盘块可以保存的元组数目，关系R的磁盘块数，关系S的磁盘块数
-
+end_blk = -1 # 结束块编号
 
 class Buffer:
     def __init__(self, blk_num: int = 8):
@@ -96,11 +99,15 @@ def gene_data():
 
 # 将生成的关系实例写入磁盘块中
 def write_disk(r_lst: list, s_lst: list):
-    all_data = [('r', blk_num1, r_lst), ('s', blk_num2, s_lst)]
+    all_data = [('R', blk_num1, r_lst), ('S', blk_num2, s_lst)]
     for data in all_data:  # 将关系实例写入模拟磁盘
         for idx in range(data[1]):
-            with open('%s%s%d.blk' % (disk_dir, data[0], idx), 'w') as f:
+            with open('%s%s%d.blk' % (disk_dir, data[0], idx+1), 'w') as f:
                 blk_data = ['%d %d' % item for item in data[2][idx * tuple_num:(idx + 1) * tuple_num]]
+                if idx+1 != data[1]:
+                    blk_data.append('%s' % (idx+2))
+                else:
+                    blk_data.append('%s' % end_blk)
                 f.write('\n'.join(blk_data))
 
 
