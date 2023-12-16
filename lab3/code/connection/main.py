@@ -175,7 +175,7 @@ def nested_loop_join(buffer:Buffer, relationship1, index1, relationship2, index2
 # 外排序算法(多路外存归并排序，每个归并段7页，即使用7个缓冲块，另外输出使用1个)
 def sort(buffer:Buffer, relationship, attribute_index):
     now_blk = 1
-    segment_num = 1
+    segment_num = 0
     
     # 创建归并段
     while now_blk != -1:
@@ -201,19 +201,19 @@ def sort(buffer:Buffer, relationship, attribute_index):
             result.append((buffer.data[buffer_index])[index2])
             if len(result) == 7: # 输出缓冲区满
                 result.append('%s' % (result_num + 1))
-                buffer.write_buffer(result, '%s%d%s%d.blk' % (sort_dir, segment_num, relationship, result_num))
+                buffer.write_buffer(result, '%s%d%s%d.blk' % (sort_dir, segment_num + 1, relationship, result_num))
                 result_num += 1
                 result = []
         
         if result: 
             result.append('%s' % end_blk)
-            buffer.write_buffer(result, '%s%d%s%d.blk' % (sort_dir, segment_num, relationship, result_num)) # 段名+关系名+块序号
+            buffer.write_buffer(result, '%s%d%s%d.blk' % (sort_dir, segment_num + 1, relationship, result_num)) # 段名+关系名+块序号
         else:
-            index = buffer.load_blk('%s%d%s%d.blk' % (sort_dir, segment_num, relationship, result_num - 1))
+            index = buffer.load_blk('%s%d%s%d.blk' % (sort_dir, segment_num + 1, relationship, result_num - 1))
             x = buffer.data[index]
             buffer.free_blk(index)
             x[-1] = '-1'
-            buffer.write_buffer(x, '%s%d%s%d.blk' % (sort_dir, segment_num, relationship, result_num - 1))
+            buffer.write_buffer(x, '%s%d%s%d.blk' % (sort_dir, segment_num + 1, relationship, result_num - 1))
 
 
         for index in index_list: # 释放外层占用缓冲区
@@ -221,28 +221,69 @@ def sort(buffer:Buffer, relationship, attribute_index):
         
         segment_num += 1
 
-    # # 多路归并
-    # now_blk_list = [1]*segment_num # 每段存储块索引
-    # now_tuple_list = [0]*segment_num # 当前每段的元组索引
-    # index_list = []
-    # for segment in range(segment_num): # 读入每段第一块
-    #     index = buffer.load_blk('%s%d%s%d.blk' % (sort_dir, segment + 1, relationship, 1))
-    #     index_list.append(index)
-    # while any(now_blk !=-1 for now_blk in now_blk_list):
-    #     # 从缓冲区中选最小的
-    #     sort_list = []
-    #     for index in index_list: # 取出所有需要比较的属性
-    #         for data in buffer.data[index]:
-    #             relationship_tuple = data.split()
-    #             if len(relationship_tuple) == 2: # 如果不是下一块的索引
-    #                 sort_list.append(int(relationship_tuple[attribute_index]))
-    #     min_value = min(sort_list)
-    #     min_indices = [index for index, value in enumerate(sort_list) if value == min_value] # 返回最小值索引
-    #     # 放入result中并修改元组索引
-    #     for min_index in min_indices:
-    #         index1, index2 = divmod(sort_index, 7) 
-    #     # 当元组长度为1时更换块，并更新存储块索引
+    # 多路归并
+    count = 0
+    threshold = 0
+    result = []
+    result_num = 1
+    now_blk_list = [1]*segment_num # 每段存储块索引+1（即名称中的段数）
+    now_tuple_list = [0]*segment_num # 当前每段的元组索引
+    index_list = []
+    for segment in range(segment_num): # 读入每段第一块
+        index = buffer.load_blk('%s%d%s%d.blk' % (sort_dir, segment + 1, relationship, 1))
+        index_list.append(index)
+    while any(now_blk !=-1 for now_blk in now_blk_list) or any(now_index != 7 for now_index in now_tuple_list):
+        # 从缓冲区中选最小的
+        sort_list = []
+        for index in index_list: # 取出所有需要比较的属性
+            for data in buffer.data[index]:
+                relationship_tuple = data.split()
+                if len(relationship_tuple) == 2: # 如果不是下一块的索引
+                    sort_list.append(int(relationship_tuple[attribute_index]))
+        if count == 0:
+            min_value = min([value for value in sort_list if value > threshold])
+        if count == 1:
+            min_value = min([value for value in sort_list if value == threshold])
+            count = 0
+        threshold = min_value
+        min_indices = [index for index, value in enumerate(sort_list) if value == min_value] # 返回最小值索引
+        # 放入result中并修改元组索引; 当元组长度为1时更换块，并更新存储块索引
+        for min_index in min_indices:
+            index1, index2 = divmod(min_index, 7) # TODO: 此处假设每块都被填满7个
+            if index2 >= now_tuple_list[index1]:
+                buffer_index = index_list[index1]
+                result.append((buffer.data[buffer_index])[index2])
+                now_tuple_list[index1] += 1 # 更新元组索引
+            x = ((buffer.data[buffer_index])[index2+1]).split()
+            if len(x) == 1:
+                if x[0] == '-1':
+                    now_blk_list[index1] = -1
+                else:
+                    count = 1
+                    buffer.free_blk(buffer_index)
+                    index = buffer.load_blk('%s%d%s%d.blk' % (sort_dir, index1 + 1, relationship, int(x[0]))) # 载入新的块
+                    now_blk_list[index1] = int(x[0]) # 更新存储块索引
+                    now_tuple_list[index1] = 0
+            
+            if len(result) == 7: # 输出缓冲区满
+                result.append('%s' % (result_num + 1))
+                buffer.write_buffer(result, '%s%s%d.blk' % (sort_dir, relationship, result_num))
+                result_num += 1
+                result = []
+    
 
+    for index in index_list: # 释放占用缓冲区
+        buffer.free_blk(index)
+
+    if result: 
+        result.append('%s' % end_blk)
+        buffer.write_buffer(result, '%s%s%d.blk' % (sort_dir, relationship, result_num)) # 段名+关系名+块序号
+    else:
+        index = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship, result_num - 1))
+        x = buffer.data[index]
+        buffer.free_blk(index)
+        x[-1] = '-1'
+        buffer.write_buffer(x, '%s%s%d.blk' % (sort_dir, relationship, result_num - 1))
 
     return segment_num
 
@@ -250,7 +291,7 @@ def sort(buffer:Buffer, relationship, attribute_index):
 def sort_merge_join(buffer:Buffer, relationship1, index1, relationship2, index2):
     # 归并排序
     segment_num1 = sort(buffer, relationship1, index1)
-    # segment_num2 = sort(buffer, relationship2, index2)
+    segment_num2 = sort(buffer, relationship2, index2)
 
 # 清空所有缓冲区
 def clear_buffer(buffer:Buffer):
@@ -259,17 +300,17 @@ def clear_buffer(buffer:Buffer):
 
 def main():
     buffer = Buffer(buffer_size) # 创建缓冲区
-    # drop_blk_in_dir(select_dir) # 清空磁盘
-    select(buffer, 'R', 'A', 40)
-    select(buffer, 'S', 'C', 60)
+    # # drop_blk_in_dir(select_dir) # 清空磁盘
+    # select(buffer, 'R', 'A', 40)
+    # select(buffer, 'S', 'C', 60)
 
-    clear_buffer(buffer)
-    # drop_blk_in_dir(project_dir) # 清空磁盘
-    project(buffer, 'R', 'A')
+    # clear_buffer(buffer)
+    # # drop_blk_in_dir(project_dir) # 清空磁盘
+    # project(buffer, 'R', 'A')
 
-    clear_buffer(buffer)
-    # drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
-    join('nested loop', buffer, 'R', 'A', 'S', 'C')
+    # clear_buffer(buffer)
+    # # drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
+    # join('nested loop', buffer, 'R', 'A', 'S', 'C')
 
     clear_buffer(buffer)
     # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
