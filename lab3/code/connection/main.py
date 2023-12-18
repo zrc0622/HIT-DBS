@@ -138,9 +138,10 @@ def nested_loop_join(buffer:Buffer, relationship1, index1, relationship2, index2
             now_blk1 = int(((buffer.data[outer_index_list[-1]])[-1].split())[0]) # 取出下一块的地址
             if now_blk1 == -1:
                 break
+        now_blk2 = 1
         while now_blk2 != end_blk: # 内层循环
             inner_index = buffer.load_blk('%s%s%d.blk' % (data_dir, relationship2, now_blk2))
-            now_blk2 = int(((buffer.data[inner_index])[-1].split())[0])
+            now_blk2 = int(((buffer.data[inner_index])[-1].split())[0])       
             
             for outer_index in outer_index_list: # 缓冲区排序
                 for outer_data in buffer.data[outer_index]:
@@ -287,11 +288,124 @@ def sort(buffer:Buffer, relationship, attribute_index):
 
     return segment_num
 
-# 排序归并连接
+# 排序归并连接，无法直接进行排序归并连接，先分段排序，再对各段排序，最后对排序结果进行连接
 def sort_merge_join(buffer:Buffer, relationship1, index1, relationship2, index2):
-    # 归并排序
-    segment_num1 = sort(buffer, relationship1, index1)
-    segment_num2 = sort(buffer, relationship2, index2)
+    # # 归并排序
+    # segment_num1 = sort(buffer, relationship1, index1)
+    # segment_num2 = sort(buffer, relationship2, index2)
+    done1 = False
+    done2 = False
+
+    buffer_index1 = -1 # 关系R占用的缓冲块索引
+    buffer_index2 = -1
+
+    now_read1 = 0 # 关系R当前读到的元组索引
+    now_read2 = 0
+
+    now_blk1 = 1 # 关系R当前读到的磁盘块索引
+    now_blk2 = 1
+
+    join_index1 = [] # 关系R用于连接的元组值
+    join_index2 = []
+
+    now_value = 0 # 当前连接键值
+    find = False # 是否找到连接键值
+
+    buffer_index1 = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship1, now_blk1))
+    read1 = ((buffer.data[buffer_index1])[now_read1]).split()
+    buffer_index2 = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship2, now_blk2))
+    read2 = ((buffer.data[buffer_index2])[now_read2]).split()
+
+    result = []
+    result_num = 1
+
+    # 1找R和S大于now_value最小的
+        # 2如果不等 小者清除所有缓存块 并读取一个新的块 返回1
+        # 3如果相等 
+            # 4取出相等的索引，放入join_index1中
+                #如果最后一个是7，则读入新的块，放回1
+    
+    while (not done1) and (not done2): # TODO: 假设每块都满
+        last_read1 = read1
+        read1 = ((buffer.data[buffer_index1])[now_read1]).split()
+        last_read2 = read2
+        read2 = ((buffer.data[buffer_index2])[now_read2]).split()
+        
+        # 如果缺块则换下一块
+        if len(read1) == 1 and read1[0] != '-1':
+            buffer.free_blk(buffer_index1)
+            now_blk1 = int(read1[0])
+            buffer_index1 = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship1, now_blk1))
+            now_read1 = 0
+            read1 = ((buffer.data[buffer_index1])[now_read1]).split()
+        if read1[0] == '-1':
+            read1 = last_read1
+            done1 = True
+        if len(read2) == 1 and read2[0] != '-1':
+            buffer.free_blk(buffer_index2)
+            now_blk2 = int(read2[0])
+            buffer_index2 = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship2, now_blk2))
+            now_read2 = 0
+            read2 = ((buffer.data[buffer_index2])[now_read2]).split()
+        if read2[0] == '-1':
+            read2 = last_read2
+            done2 = False
+
+        if not find:
+            if int(read1[index1]) == int(read2[index2]):
+                find = True
+                now_value = int(read1[index1])
+            else:
+                if int(read1[index1]) > int(read2[index2]):
+                    now_read2 += 1
+                else:
+                    now_read1 += 1
+        
+        if find:
+            while int(read1[index1]) == now_value:
+                join_index1.append(read1)
+                now_read1 += 1
+                read1 = ((buffer.data[buffer_index1])[now_read1]).split()
+                if len(read1) == 1 and read1[0] != '-1':
+                    buffer.free_blk(buffer_index1)
+                    now_blk1 = int(read1[0])
+                    buffer_index1 = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship1, now_blk1))
+                    now_read1 = 0
+                    read1 = ((buffer.data[buffer_index1])[now_read1]).split()
+            while int(read2[index2]) == now_value:
+                join_index2.append(read2)
+                now_read2 += 1
+                read2 = ((buffer.data[buffer_index2])[now_read2]).split()
+                if len(read2) == 1 and read2[0] != '-1':
+                    buffer.free_blk(buffer_index2)
+                    now_blk2 = int(read2[0])
+                    buffer_index2 = buffer.load_blk('%s%s%d.blk' % (sort_dir, relationship2, now_blk2))
+                    now_read2 = 0
+                    read2 = ((buffer.data[buffer_index2])[now_read2]).split()
+            for data1 in join_index1:
+                for data2 in join_index2:
+                    result.append('%s %s %s' % (data1[abs(index1-1)], data2[abs(index2-1)], data1[index1]))
+                    if len(result) == 5: # 输出缓冲区满（假设输出缓冲区只有一块，不算在输入缓冲区里，一块64字节能存(64-4)/(4*3)=5个元组）
+                        result.append('%s' % (result_num + 1))
+                        buffer.write_buffer(result, '%s%s%s%d.blk' % (sort_merge_join_dir, relationship1, relationship2, result_num))
+                        result_num += 1
+                        result = []
+            join_index1 = []
+            join_index2 = []
+            find = False
+
+    if result: 
+        result.append('%s' % end_blk)
+        buffer.write_buffer(result, '%s%s%s%d.blk' % (sort_merge_join_dir, relationship1, relationship2, result_num))
+    else:
+        index = buffer.load_blk('%s%s%s%d.blk' % (sort_merge_join_dir, relationship1, relationship2, result_num - 1))
+        x = buffer.data[index]
+        buffer.free_blk(index)
+        x[-1]= '-1'
+        buffer.write_buffer(x, '%s%s%s%d.blk' % (sort_merge_join_dir, relationship1, relationship2, result_num - 1))
+    
+    buffer.free_blk(buffer_index1)
+    buffer.free_blk(buffer_index2)
 
 # 清空所有缓冲区
 def clear_buffer(buffer:Buffer):
@@ -308,13 +422,13 @@ def main():
     # # drop_blk_in_dir(project_dir) # 清空磁盘
     # project(buffer, 'R', 'A')
 
-    # clear_buffer(buffer)
-    # # drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
-    # join('nested loop', buffer, 'R', 'A', 'S', 'C')
-
     clear_buffer(buffer)
-    # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
-    join('sort merge', buffer, 'R', 'A', 'S', 'C')
+    drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
+    join('nested loop', buffer, 'R', 'A', 'S', 'C')
+
+    # clear_buffer(buffer)
+    # # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
+    # join('sort merge', buffer, 'R', 'A', 'S', 'C')
 
 
 if __name__ == "__main__":
