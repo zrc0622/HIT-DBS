@@ -9,7 +9,9 @@ select_dir = emulate_disk_dir + "output/select/"
 project_dir = emulate_disk_dir + "output/project/"
 nested_loop_join_dir = emulate_disk_dir + "output/join/nested_loop/"
 sort_merge_join_dir = emulate_disk_dir + "output/join/sort_merge/"
-sort_dir = emulate_disk_dir + "output/sort/"
+sort_dir = emulate_disk_dir + "output/sort/" # 排列结果
+hash_join_dir = emulate_disk_dir + "output/join/hash/"
+hash_dir = emulate_disk_dir + "output/hash/" # 哈希桶
 
 # 基于扫描的选择算法, 只使用1个缓冲块，另外输出使用1个
 def select(buffer: Buffer, relationship, attribute, value): # 缓冲区、关系名、属性名、值
@@ -122,6 +124,8 @@ def join(type, buffer, relationship1, attribute1, relationship2, attribute2):
         nested_loop_join(buffer, relationship1, attribute_index1, relationship2, attribute_index2)
     if type == 'sort merge':
         sort_merge_join(buffer, relationship1, attribute_index1, relationship2, attribute_index2)
+    if type == 'hash':
+        hash_join(buffer, relationship1, attribute_index1, relationship2, attribute_index2)
 
 # 基于块的嵌套循环连接算法（外层使用6个缓冲块，内层使用1个，输出使用1个）
 def nested_loop_join(buffer:Buffer, relationship1, index1, relationship2, index2):
@@ -290,9 +294,9 @@ def sort(buffer:Buffer, relationship, attribute_index):
 
 # 排序归并连接，无法直接进行排序归并连接，先分段排序，再对各段排序，最后对排序结果进行连接
 def sort_merge_join(buffer:Buffer, relationship1, index1, relationship2, index2):
-    # # 归并排序
-    # segment_num1 = sort(buffer, relationship1, index1)
-    # segment_num2 = sort(buffer, relationship2, index2)
+    # 归并排序
+    segment_num1 = sort(buffer, relationship1, index1)
+    segment_num2 = sort(buffer, relationship2, index2)
     done1 = False
     done2 = False
 
@@ -319,12 +323,7 @@ def sort_merge_join(buffer:Buffer, relationship1, index1, relationship2, index2)
     result = []
     result_num = 1
 
-    # 1找R和S大于now_value最小的
-        # 2如果不等 小者清除所有缓存块 并读取一个新的块 返回1
-        # 3如果相等 
-            # 4取出相等的索引，放入join_index1中
-                #如果最后一个是7，则读入新的块，放回1
-    
+    # 对排序结果进行连接    
     while (not done1) and (not done2): # TODO: 假设每块都满
         last_read1 = read1
         read1 = ((buffer.data[buffer_index1])[now_read1]).split()
@@ -407,6 +406,81 @@ def sort_merge_join(buffer:Buffer, relationship1, index1, relationship2, index2)
     buffer.free_blk(buffer_index1)
     buffer.free_blk(buffer_index2)
 
+# 哈希连接
+def hash_join(buffer:Buffer, relationship1, attribute_index1, relationship2, attribute_index2):
+    drop_blk_in_dir(hash_dir)
+    # 创建hash桶
+    hash_num = buffer_size - 1
+    now_blk1 = 1
+    now_blk2 = 1
+    all_data = [(relationship1, [[] for _ in range(hash_num)], now_blk1), (relationship2, [[] for _ in range(hash_num)], now_blk2)]
+    hash_blk = [[] for _ in range(hash_num)]
+    for item in all_data:
+        now_blk = 1
+        while now_blk != -1:
+            blk_data = buffer.data[buffer.load_blk('%s%s%d.blk' % (data_dir, item[0], now_blk))]
+            for data in blk_data:
+                if len(data.split()) == 2:
+                    hash_idx = int(data.split()[attribute_index1]) % hash_num
+                    hash_blk[hash_idx].append(data)
+                    if len(hash_blk[hash_idx]) == tuple_num:
+                        hash_blk[hash_idx].append('%s' % (len(item[1][hash_idx])+2))
+                        addr = '%s%s%d_%d.blk' % (hash_dir, item[0], hash_idx, len(item[1][hash_idx])+1)
+                        buffer.write_buffer(hash_blk[hash_idx], addr)
+                        item[1][hash_idx].append(addr)
+                        hash_blk[hash_idx] = []
+                else:
+                    now_blk = int((data.split())[0])
+            buffer.free_blk(0)
+        for idx in range(hash_num):
+            if hash_blk[idx]:
+                hash_blk[idx].append('-1')
+                addr = '%s%s%d_%d.blk' % (hash_dir, item[0], idx, len(item[1][idx])+1)
+                buffer.write_buffer(hash_blk[idx], addr)
+                item[1][idx].append(addr)
+                hash_blk[idx] = []
+            else:
+                index = buffer.load_blk('%s%s%d_%d.blk' % (hash_dir, item[0], idx, len(item[1][idx])))
+                x = buffer.data[index]
+                buffer.free_blk(index)
+                x[-1]= '-1'
+                buffer.write_buffer(x,  '%s%s%d_%d.blk' % (hash_dir, item[0], idx, len(item[1][idx])))
+    
+    # 对对应桶的进行连接
+
+    result = []
+    result_num = 1
+    for idx in range(hash_num):
+        R_data = []
+        S_data = []
+        for addr in all_data[0][1][idx]:
+            index = buffer.load_blk(addr)
+            R_data.extend((buffer.data[index])[0:-1])
+            buffer.free_blk(index)
+        for addr in all_data[1][1][idx]:
+            index = buffer.load_blk(addr)
+            S_data.extend((buffer.data[index])[0:-1])
+            buffer.free_blk(index)
+        for r_data in R_data:
+                for s_data in S_data:
+                    if r_data.split()[0] == s_data.split()[0]:
+                        result.append('%s %s %s' % ((r_data.split())[abs(attribute_index1-1)], (s_data.split())[abs(attribute_index2-1)], (r_data.split())[attribute_index1]))
+                        if len(result) == 5: # 输出缓冲区满（假设输出缓冲区只有一块，不算在输入缓冲区里，一块64字节能存(64-4)/(4*3)=5个元组）
+                            result.append('%s' % (result_num + 1))
+                            buffer.write_buffer(result, '%s%s%s%d.blk' % (hash_join_dir, relationship1, relationship2, result_num))
+                            result_num += 1
+                            result = []
+    if result: 
+        result.append('%s' % end_blk)
+        buffer.write_buffer(result, '%s%s%s%d.blk' % (hash_join_dir, relationship1, relationship2, result_num))
+    else:
+        index = buffer.load_blk('%s%s%s%d.blk' % (hash_join_dir, relationship1, relationship2, result_num - 1))
+        x = buffer.data[index]
+        buffer.free_blk(index)
+        x[-1]= '-1'
+        buffer.write_buffer(x, '%s%s%s%d.blk' % (hash_join_dir, relationship1, relationship2, result_num - 1))
+
+
 # 清空所有缓冲区
 def clear_buffer(buffer:Buffer):
     for index in range(buffer_size):
@@ -422,14 +496,17 @@ def main():
     # # drop_blk_in_dir(project_dir) # 清空磁盘
     # project(buffer, 'R', 'A')
 
-    clear_buffer(buffer)
-    drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
-    join('nested loop', buffer, 'R', 'A', 'S', 'C')
+    # clear_buffer(buffer)
+    # drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
+    # join('nested loop', buffer, 'R', 'A', 'S', 'C')
 
     # clear_buffer(buffer)
     # # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
     # join('sort merge', buffer, 'R', 'A', 'S', 'C')
 
+    clear_buffer(buffer)
+    # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
+    join('hash', buffer, 'R', 'A', 'S', 'C')
 
 if __name__ == "__main__":
     main()
