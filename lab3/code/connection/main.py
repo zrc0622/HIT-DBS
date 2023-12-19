@@ -488,24 +488,24 @@ def clear_buffer(buffer:Buffer):
 
 def main():
     buffer = Buffer(buffer_size) # 创建缓冲区
-    # # drop_blk_in_dir(select_dir) # 清空磁盘
-    # select(buffer, 'R', 'A', 40)
-    # select(buffer, 'S', 'C', 60)
-
-    # clear_buffer(buffer)
-    # # drop_blk_in_dir(project_dir) # 清空磁盘
-    # project(buffer, 'R', 'A')
-
-    # clear_buffer(buffer)
-    # drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
-    # join('nested loop', buffer, 'R', 'A', 'S', 'C')
-
-    # clear_buffer(buffer)
-    # # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
-    # join('sort merge', buffer, 'R', 'A', 'S', 'C')
+    drop_blk_in_dir(select_dir) # 清空磁盘
+    select(buffer, 'R', 'A', 40)
+    select(buffer, 'S', 'C', 60)
 
     clear_buffer(buffer)
-    # drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
+    drop_blk_in_dir(project_dir) # 清空磁盘
+    project(buffer, 'R', 'A')
+
+    clear_buffer(buffer)
+    drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
+    join('nested loop', buffer, 'R', 'A', 'S', 'C')
+
+    clear_buffer(buffer)
+    drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
+    join('sort merge', buffer, 'R', 'A', 'S', 'C')
+
+    clear_buffer(buffer)
+    drop_blk_in_dir(hash_join_dir) # 清空磁盘
     join('hash', buffer, 'R', 'A', 'S', 'C')
 
 if __name__ == "__main__":
