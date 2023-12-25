@@ -89,7 +89,7 @@ class Ui_MainWindow(object):
         self.optimize_on.setText(_translate("MainWindow", "优化"))
         self.optimize_on.setFixedWidth(100)
         self.parse_button.setText(_translate("MainWindow", "生成查询树"))
-        self.parse_button.setFixedWidth(100)
+        self.parse_button.setFixedWidth(200)
         self.query_box.setFixedWidth(100)
         
         # 创建字体对象

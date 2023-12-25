@@ -105,6 +105,7 @@ def project(buffer:Buffer, relationship, attribute): # TODO: 基于排序（外�
         x[-1]= '-1'
         buffer.write_buffer(x, '%s%s%d.blk' % (project_dir, item[0], result_num-1))
 
+# 通过join实现连接操作，有三种可用算法
 def join(type, buffer, relationship1, attribute1, relationship2, attribute2):
     if relationship1 == "R" and attribute1 == "A":
         attribute_index1 = 0
@@ -480,7 +481,6 @@ def hash_join(buffer:Buffer, relationship1, attribute_index1, relationship2, att
         x[-1]= '-1'
         buffer.write_buffer(x, '%s%s%s%d.blk' % (hash_join_dir, relationship1, relationship2, result_num - 1))
 
-
 # 清空所有缓冲区
 def clear_buffer(buffer:Buffer):
     for index in range(buffer_size):
@@ -490,23 +490,34 @@ def main():
     buffer = Buffer(buffer_size) # 创建缓冲区
     drop_blk_in_dir(select_dir) # 清空磁盘
     select(buffer, 'R', 'A', 40)
+    # print(f'selcet R io is: {buffer.io_num}')
+    buffer.io_num = 0
     select(buffer, 'S', 'C', 60)
+    # print(f'selcet S io is: {buffer.io_num}')
 
     clear_buffer(buffer)
+    buffer.io_num = 0
     drop_blk_in_dir(project_dir) # 清空磁盘
     project(buffer, 'R', 'A')
+    # print(f'project io is: {buffer.io_num}')
 
     clear_buffer(buffer)
+    buffer.io_num = 0
     drop_blk_in_dir(nested_loop_join_dir) # 清空磁盘
     join('nested loop', buffer, 'R', 'A', 'S', 'C')
+    # print(f'nested loop join io is: {buffer.io_num}')
 
     clear_buffer(buffer)
+    buffer.io_num = 0
     drop_blk_in_dir(sort_merge_join_dir) # 清空磁盘
     join('sort merge', buffer, 'R', 'A', 'S', 'C')
+    # print(f'sort merge join io is: {buffer.io_num}')
 
     clear_buffer(buffer)
+    buffer.io_num = 0
     drop_blk_in_dir(hash_join_dir) # 清空磁盘
     join('hash', buffer, 'R', 'A', 'S', 'C')
+    # print(f'hash join io is: {buffer.io_num}')
 
 if __name__ == "__main__":
     main()

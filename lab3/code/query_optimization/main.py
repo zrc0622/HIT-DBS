@@ -8,15 +8,15 @@ query2 = '''SELECT [ ESSN = '01' ] ( PROJECTION [ ESSN, PNAME ] ( WORKS_ON JOIN 
 
 queries = [query0, query1, query2]
 
-
+# 自定义类，用来表示查询树
 class TreeNode:
     def __init__(self, op='', info=''):
         self.child = []  # 儿子节点
-        self.op = op
+        self.op = op # 操作符
         self.info = info
 
     def __str__(self):
-        return (self.op if self.op else '') + (' ' + self.info if self.info else '')
+        return (self.op if self.op else '') + (' ' + self.info if self.info else '') # 当作为字符串使用时，输出操作符和条件
 
 
 class MainWindow(QMainWindow):
@@ -46,9 +46,9 @@ class MainWindow(QMainWindow):
         while tree_stack:
             tree_node, item_node = tree_stack.pop(0), item_stack.pop(0)
             item_node.setText(0, str(tree_node))
-            tree_stack = tree_node.child + tree_stack
-            item_stack = [QTreeWidgetItem(item_node) for child in tree_node.child] + item_stack
-        self.ui.parse_tree.expandAll()
+            tree_stack = tree_node.child + tree_stack # 将子树加入栈顶
+            item_stack = [QTreeWidgetItem(item_node) for _ in tree_node.child] + item_stack # 为子树创建节点
+        self.ui.parse_tree.expandAll() # 展开查询树
         self.ui.parse_tree.setStyle(QStyleFactory.create('windows'))
         self.ui.parse_tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
 
@@ -58,15 +58,15 @@ def get_tree(query: str):
     while idx < len(tokens):
         token = tokens[idx]
         if token == 'SELECT' or token == 'PROJECTION':
-            end = tokens.index(']', idx)
-            node.op, node.info = token, ' '.join(tokens[idx + 2:end])
+            end = tokens.index(']', idx) # 找到最近的]的索引
+            node.op, node.info = token, ' '.join(tokens[idx + 2:end]) # info存入选择条件
             idx = end + 1
         elif token == 'JOIN':
             node.op = token
             node.child.append(TreeNode(info=tokens[idx - 1]))  # 连接操作的第一个关系
             node.child.append(TreeNode(info=tokens[idx + 1]))  # 连接操作的第二个关系
             idx += 1
-        elif token == '(':  # 括号内为查询子句，字句所在的子树应该更靠近叶节点
+        elif token == '(':  # 括号内为查询子句
             count, idy = 1, idx + 1
             while idy < len(tokens) and count > 0:
                 if tokens[idy] == '(':
@@ -74,7 +74,7 @@ def get_tree(query: str):
                 elif tokens[idy] == ')':
                     count -= 1
                 idy += 1
-            node.child.append(get_tree(' '.join(tokens[idx + 1:idy - 1])))
+            node.child.append(get_tree(' '.join(tokens[idx + 1:idy - 1]))) # 递归调用，并将结果加入上层子节点
             idx = idy
         else:
             idx += 1
@@ -88,12 +88,14 @@ def output_tree(node: TreeNode, sep=''):
     if len(node.child) >= 2:
         output_tree(node.child[1], sep + '\t')
 
-
+# 遇到join时
 def optimize(node: TreeNode, info_lst=None) -> TreeNode:
+    # 遇到选择和投影时，记录下二者条件，并递归优化其子树
     if node.op == 'SELECT':
         node = optimize(node.child[0], node.info.split('&'))
     elif node.op == 'PROJECTION':
         node.child[0] = optimize(node.child[0], info_lst)
+    # 遇到连接时，将上层的选择或者投影操作下移（投影不下移）
     elif node.op == 'JOIN':
         node0 = TreeNode(op='SELECT', info=info_lst[0])
         node0.child.append(node.child[0])
@@ -110,28 +112,3 @@ if __name__ == '__main__':
     main_win = MainWindow(Ui_MainWindow())
     main_win.show()
     sys.exit(app.exec_())
-
-'''
-用户界面（UI）：
-
-代码使用 PyQt5 创建了一个图形用户界面（UI），用于显示 SQL 查询及其相应的解析树。
-用户界面类（Ui_MainWindow）：
-
-该类是由 Qt Designer 或类似工具生成的，定义了主窗口的结构。
-主应用程序类（MainWindow）：
-
-该类继承自 QMainWindow，负责主要的应用程序逻辑。
-__init__ 方法初始化主窗口，使用提供的 Ui_MainWindow 实例设置用户界面，并调用 set_query 方法填充查询表。
-set_query 方法用示例查询填充查询表。
-query 方法与“生成查询树”按钮连接，当按钮被点击时调用。它从组合框中获取所选查询，使用 get_tree 函数将其解析为树结构，可选地使用 optimize 函数优化树，然后在解析树窗口中显示该树。
-查询树节点类（TreeNode）：
-
-该类表示解析树中的节点。每个节点都有一个操作（op）、信息（info）和一个子节点列表。
-查询解析函数（get_tree 和 optimize）：
-
-get_tree 函数接受一个 SQL 查询作为输入，并递归构建了一个由 TreeNode 对象表示的解析树。它处理了查询中的 SELECT、PROJECTION、JOIN 和括号。
-optimize 函数接受一个解析树节点，并对树进行优化。它专门处理 SELECT、PROJECTION 和 JOIN 操作的优化。
-应用程序入口点（`if name == 'main':）：
-
-代码的这部分初始化了 PyQt 应用程序，创建了 MainWindow 类的实例，并显示主窗口。
-'''
