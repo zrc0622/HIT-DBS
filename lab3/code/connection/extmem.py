@@ -5,7 +5,7 @@
 3. drop_blk_in_dir函数: 删除整个目录中的所有块
 4. gene_data函数: 生成关系R和S的随机数据, 这些数据包括元组和元组中的属性值, 范围由预定义的参数确定。
 5. write_disk函数: 将生成的关系实例写入模拟磁盘, 每个关系的数据被划分为多个磁盘块, 每个磁盘块保存一定数量的元组。
-代码来源于https://github.com/HIT-SCIR-chichi/hit_db_lab/blob/master/lab2/extmem.py, 我仅为其添加了易于理解的注释
+代码来源于https://github.com/RookieJunChen/HIT-Database/blob/master/%E5%AE%9E%E9%AA%8C/%E5%AE%9E%E9%AA%8C2/DBS_lab2/part1/extmem.py, 我仅为其添加了易于理解的注释
 
 关系R具有两个属性A和B, 其中A和B的属性值均为int型(4个字节), A的值域为[1, 40], B的值域为[1, 1000]
 关系S具有两个属性C和D, 其中C和D的属性值均为int型(4个字节)。C的值域为[20, 60], D的值域为[1, 1000]
